@@ -1,0 +1,10 @@
+{
+  // Static-assets-only Worker: no server code, just serves the built `public/` dir.
+  // Docs: https://developers.cloudflare.com/workers/static-assets/
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "peace-kids-bingo",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./public"
+  }
+}

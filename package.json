@@ -1,0 +1,16 @@
+{
+  "name": "simple-online-bingo-card",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static, phone-first distributed bingo. Each player's board is generated deterministically from their name; everything stays local. Deployed on Cloudflare Workers.",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "preview": "npm run build && python3 -m http.server --directory public 8788"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
