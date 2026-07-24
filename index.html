@@ -88,7 +88,6 @@
   .cell.marked .stamp{opacity:1;transform:scale(1);}
 
   /* center free space */
-  .cell.free{cursor:default;}
   .cell.free::after{
     content:"FREE";position:absolute;bottom:2px;left:0;right:0;z-index:2;
     font-size:8px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.85);
@@ -171,7 +170,6 @@ const CONFIG = {
 };
 
 const PROMPTS = [
-  { text: "Body Traverse",             emoji: "🧗" },
   { text: "Find Dianne",               emoji: "👩" },
   { text: "<i>Where Is She?</i>",      emoji: "🦇" },
   { text: "Celly for the Camera",      emoji: "📸" },
@@ -281,7 +279,7 @@ function loadMarks(name) {
     if (Array.isArray(arr) && arr.length === 25) return arr.map(Boolean);
   } catch (e) {}
   const fresh = new Array(25).fill(false);
-  fresh[FREE_INDEX] = true; // free space starts marked
+  // Free space is not auto-marked; players tap it like any other square.
   return fresh;
 }
 function saveMarks() {
@@ -303,9 +301,7 @@ function render() {
     const el = document.createElement("button");
     el.className = "cell" + (cell.free ? " free" : "") + (marks[i] ? " marked" : "");
     el.innerHTML = cellInner(cell);
-    if (!cell.free) {
-      el.addEventListener("click", () => toggle(i, el));
-    }
+    el.addEventListener("click", () => toggle(i, el));
     board.appendChild(el);
   });
   document.getElementById("whoName").textContent = displayName;
