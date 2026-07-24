@@ -14,8 +14,9 @@ top of `index.html`, so it re-themes to anything.
 
 ## How it works
 
-- The game has a **pool of prompts** (currently ~30). Each player gets a random **24-square
-  subset** arranged on a 5×5 grid, with a fixed **FREE** square in the center.
+- The game has a **pool of 24 prompts**. Each player gets all 24 arranged on a 5×5 grid in a
+  layout **shuffled from their name**, with a fixed **FREE** square in the center. (Add more
+  than 24 to the pool and each player instead draws a random subset -- see below.)
 - A player's name is normalized (`trim` → collapse spaces → `lowercase` → Unicode `NFC`) and
   hashed with **cyrb128** into a 128-bit seed. That seed drives an **sfc32** PRNG, which does
   a **Fisher-Yates** shuffle of the pool. Same name in → same board out, forever, everywhere.
