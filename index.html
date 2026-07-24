@@ -160,47 +160,54 @@
 <script>
 /* ============================================================================
    CONTENT SETTINGS -- edit these two blocks to change the game.
-   Each prompt is either a "string" or { text, emoji } or { text, img }.
-   `img` is a file placed in images/ (e.g. { text:"Shotgun", img:"shotgun.png" }).
+   Each prompt is { id, text } plus optional emoji or img.
+   `img` is a file placed in images/ (e.g. { id:"shotgun", text:"Shotgun", img:"shotgun.jpg" }).
    The pool can be any size >= 24; each player gets a random 24-square subset.
+
+   `id` is a permanent key, NOT a description. It drives which square a player
+   gets and which square a mark belongs to. Rules:
+     - Give every new prompt a unique id no other prompt has ever used.
+     - Never change or reuse an id, even if you rewrite the prompt's text.
+   Follow those and you can freely rename text or add prompts without moving
+   anyone's existing squares or losing their marks.
    ========================================================================== */
 const CONFIG = {
   // Center free space.
-  freeSpace: { text: "Shotgun", img: "shotgun.jpg" },
+  freeSpace: { id: "free", text: "Shotgun", img: "shotgun.jpg" },
 };
 
 const PROMPTS = [
-  { text: "Find Dianne",               emoji: "👩" },
-  { text: "<i>Where Is She?</i>",      emoji: "🦇" },
-  { text: "Celly for the Camera",      emoji: "📸" },
-  { text: "Squatgun",                  emoji: "🏋️" },
-  { text: "Spank Train",               emoji: "🍑" },
-  { text: "Bolero",                    emoji: "💃" },
-  { text: "Beer Garden Cheers",        emoji: "🍻" },
-  { text: "Find a Friend",             emoji: "🫂" },
-  { text: "Dunk Ya Head in the Ocean", emoji: "🌊" },
-  { text: "Sexoteque",                 emoji: "🕺" },
-  { text: "Sunscreen a Friend",        emoji: "🧴" },
-  { text: "Glitter / Temp Tattoos",    emoji: "✨" },
-  { text: "ONLY DUMP",                 emoji: "💩" },
-  { text: "Propose to Mel or Benson",  emoji: "💍" },
-  { text: "Hit the Sand",              emoji: "🏖️" },
-  { text: "Drink from a Trophy",       emoji: "🏆" },
-  { text: "2 Pointer",                 emoji: "✌️" },
-  { text: "Harry Potter Twerk",        emoji: "🧹" },
-  { text: "Upside Down Only",          emoji: "🔨" },
-  { text: "Score from Your Knees",     emoji: "🧎" },
-  { text: "Gratuitous Layout",         emoji: "🤸" },
-  { text: "SPEECH",                    emoji: "🎤" },
-  { text: "Call Kids / Mom / Wife",    emoji: "📞" },
-  { text: "Celebrity Point",           emoji: "🌟" },
+  { id: "dianne",      text: "Find Dianne",               emoji: "👩" },
+  { id: "where-she",   text: "<i>Where Is She?</i>",      emoji: "🦇" },
+  { id: "celly",       text: "Celly for the Camera",      emoji: "📸" },
+  { id: "squatgun",    text: "Squatgun",                  emoji: "🏋️" },
+  { id: "spank-train", text: "Spank Train",               emoji: "🍑" },
+  { id: "bolero",      text: "Bolero",                    emoji: "💃" },
+  { id: "beer-garden", text: "Beer Garden Cheers",        emoji: "🍻" },
+  { id: "find-friend", text: "Find a Friend",             emoji: "🫂" },
+  { id: "dunk-head",   text: "Dunk Ya Head in the Ocean", emoji: "🌊" },
+  { id: "sexoteque",   text: "Sexoteque",                 emoji: "🕺" },
+  { id: "sunscreen",   text: "Sunscreen a Friend",        emoji: "🧴" },
+  { id: "glitter",     text: "Glitter / Temp Tattoos",    emoji: "✨" },
+  { id: "only-dump",   text: "ONLY DUMP",                 emoji: "💩" },
+  { id: "propose",     text: "Propose to Mel or Benson",  emoji: "💍" },
+  { id: "hit-sand",    text: "Hit the Sand",              emoji: "🏖️" },
+  { id: "trophy",      text: "Drink from a Trophy",       emoji: "🏆" },
+  { id: "two-pointer", text: "2 Pointer",                 emoji: "✌️" },
+  { id: "hp-twerk",    text: "Harry Potter Twerk",        emoji: "🧹" },
+  { id: "upside-down", text: "Upside Down Only",          emoji: "🔨" },
+  { id: "knees",       text: "Score from Your Knees",     emoji: "🧎" },
+  { id: "layout",      text: "Gratuitous Layout",         emoji: "🤸" },
+  { id: "speech",      text: "SPEECH",                    emoji: "🎤" },
+  { id: "call-home",   text: "Call Kids / Mom / Wife",    emoji: "📞" },
+  { id: "celeb-point", text: "Celebrity Point",           emoji: "🌟" },
 ];
 
 /* ============================================================================
    ENGINE -- deterministic board from a name. No server, all local.
    ========================================================================== */
 const STORE_USER = "bingo:user";
-const marksKey = (name) => "bingo:marks:" + name;
+const marksKey = (name) => "bingo:marks2:" + name; // stores an array of marked prompt ids
 const FREE_INDEX = 12; // center of a 5x5
 
 // Canonicalize a name so the same person always resolves to the same seed,
@@ -227,33 +234,22 @@ function cyrb128(str) {
   return [h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0];
 }
 
-// sfc32: seeded PRNG returning a float in [0, 1).
-function sfc32(a, b, c, d) {
-  return function () {
-    a |= 0; b |= 0; c |= 0; d |= 0;
-    let t = (a + b | 0) + d | 0;
-    d = d + 1 | 0;
-    a = b ^ b >>> 9;
-    b = c + (c << 3) | 0;
-    c = (c << 21 | c >>> 11) + t | 0;
-    return (t >>> 0) / 4294967296;
-  };
-}
-
-function normPrompt(p) {
-  return typeof p === "string" ? { text: p } : p;
+// Per-(name, id) sort key. Depends only on the name and the prompt's id, so
+// renaming a prompt or adding new ones leaves every other prompt's key -- and
+// therefore its board slot -- untouched.
+function rankKey(name, id) {
+  return cyrb128(name + "|" + id)[0];
 }
 
 // Build the 25-cell board (center = free space) deterministically from a name.
+// The 24 lowest-ranked prompts fill the grid in rank order; ties break on id.
 function boardFor(name) {
-  const rand = sfc32(...cyrb128(name));
-  const pool = PROMPTS.map(normPrompt);
-  for (let i = pool.length - 1; i > 0; i--) { // Fisher-Yates
-    const j = Math.floor(rand() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  const cells = pool.slice(0, 24);
-  cells.splice(FREE_INDEX, 0, { ...normPrompt(CONFIG.freeSpace), free: true });
+  const cells = PROMPTS
+    .map((p) => ({ p, k: rankKey(name, p.id) }))
+    .sort((a, b) => a.k - b.k || (a.p.id < b.p.id ? -1 : 1))
+    .slice(0, 24)
+    .map((r) => r.p);
+  cells.splice(FREE_INDEX, 0, { ...CONFIG.freeSpace, free: true });
   return cells;
 }
 
@@ -270,20 +266,21 @@ const LINES = (() => {
 /* ---- State + rendering ---- */
 let currentName = "";      // normalized
 let displayName = "";      // what the user typed
-let marks = new Array(25).fill(false);
+let cells = [];            // current board, 25 prompt objects
+let markedIds = new Set(); // ids the player has marked, source of truth for marks
+let marks = new Array(25).fill(false); // per-cell view of markedIds, for the win logic
 
-function loadMarks(name) {
+// Marks are keyed by prompt id, so a mark stays with its prompt no matter where
+// the prompt lands on the board or whether the prompt pool changes.
+function loadMarkedIds(name) {
   try {
-    const raw = localStorage.getItem(marksKey(name));
-    const arr = raw ? JSON.parse(raw) : null;
-    if (Array.isArray(arr) && arr.length === 25) return arr.map(Boolean);
+    const arr = JSON.parse(localStorage.getItem(marksKey(name)));
+    if (Array.isArray(arr)) return new Set(arr.filter((x) => typeof x === "string"));
   } catch (e) {}
-  const fresh = new Array(25).fill(false);
-  // Free space is not auto-marked; players tap it like any other square.
-  return fresh;
+  return new Set();
 }
 function saveMarks() {
-  try { localStorage.setItem(marksKey(currentName), JSON.stringify(marks)); } catch (e) {}
+  try { localStorage.setItem(marksKey(currentName), JSON.stringify([...markedIds])); } catch (e) {}
 }
 
 function cellInner(cell) {
@@ -295,7 +292,8 @@ function cellInner(cell) {
 
 function render() {
   const board = document.getElementById("board");
-  const cells = boardFor(currentName);
+  cells = boardFor(currentName);
+  marks = cells.map((c) => markedIds.has(c.id));
   board.innerHTML = "";
   cells.forEach((cell, i) => {
     const el = document.createElement("button");
@@ -340,7 +338,9 @@ function showBanner(text) {
 }
 
 function toggle(i, el) {
-  marks[i] = !marks[i];
+  const id = cells[i].id;
+  if (markedIds.has(id)) markedIds.delete(id); else markedIds.add(id);
+  marks[i] = markedIds.has(id);
   el.classList.toggle("marked", marks[i]);
   saveMarks();
   updateStatus(true);
@@ -351,9 +351,9 @@ function setUser(rawName) {
   displayName = rawName.trim().replace(/\s+/g, " ");
   currentName = normName(rawName);
   localStorage.setItem(STORE_USER, displayName);
-  marks = loadMarks(currentName);
-  prevBingos = LINES.filter((ln) => ln.every((idx) => marks[idx])).length;
+  markedIds = loadMarkedIds(currentName);
   render();
+  prevBingos = LINES.filter((ln) => ln.every((idx) => marks[idx])).length;
 }
 
 function openModal() {
